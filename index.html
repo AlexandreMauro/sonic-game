@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+   
+<head>
+   <title>Sonic: Run the World</title>
+   <script src="animacao.js"></script>
+   <script src="teclado.js"></script>
+   <script src="colisor.js"></script>
+   <script src="joaninha.js"></script>
+   <script src="argolas.js"></script>
+   <script src="espinho.js"></script>
+   <script src="spritesheet.js"></script>
+   <script src="explosao.js"></script>
+   <script src="explosaoring.js"></script>
+   <script src="painel.js"></script>
+   <script src="sonic.js"></script>
+   <script src="fundo.js"></script>
+   <style>
+   #link_jogar {
+      /* Inicia oculto */
+      display: none;
+   
+      /* Cores e fundo */
+      color: rgb(255, 255, 255);
+      background: url(img/botao-jogar.png);
+         
+      /* Fonte */
+      font-size: 20px;
+      font-family: sans-serif;
+      
+      /* Sem sublinhado e com sombra */
+      text-decoration: none;
+      text-shadow: 2px 2px 5px black;
+         
+      /* Posicionamento */
+      position: absolute;
+      left: 220px;
+      top: 330px;
+
+      /* A imagem do botão é 72x72, descontamos os paddings 
+      (padding define uma a distância entre o conteúdo de um elemento e suas bordas)*/
+      width: 52px;
+      height: 26px;
+      padding: 23px 10px;
+   }
+   </style>
+</head>
+
+<body>
+   <!--Tag | É obrigatório ter width (largura) e height(altura)-->
+   <canvas id="canvas_animacao" width="500" height="900"></canvas>
+   
+   <a id="link_jogar" href="javascript: iniciarJogo()">Jogar</a>
+   
+   <!--Para desenhar no Canvas, é preciso executar um script após ele 
+    ter sido carregado. Neste script obteremos o contexto gráfico,
+    que é o objeto que realiza de fato as tarefas de desenho no Canvas.-->
+   <script>
+      // Canvas e Context
+      var canvas = document.getElementById('canvas_animacao');
+      var context = canvas.getContext('2d');
+
+      // Variáveis principais
+      var imagens, animacao, teclado, colisor, sonic, criadorInimigos, criadorRing;
+      var totalImagens = 0, carregadas = 0;
+      var musicaAcao;
+      
+      // Começa carregando as imagens e músicas
+      carregarImagens();
+      carregarMusicas();
+      
+
+      /*Na função carregarImagens, facilita muito carregar um objeto 
+      ou array com os nomes das imagens e fazer um loop nele. Após 
+      carregar cada imagem, o nome é substituído pelo objeto da imagem.*/
+      function carregarImagens() {
+         // Objeto contendo os nomes das imagens
+         imagens = {
+            estrelas: 'fundo-estrelas.png', 
+            plataforma:   'fundo-plataforma.png',  
+            ring:     'argolas.png', 
+            joaninha:     'joaninha.png', 
+            espinho:     'espinho.png',
+            explosao: 'explosao.png',
+            sonic:     'sonic-spritesheet.png',
+            bgfundo:   'fundo-bg.png', 
+            bginicio: 'bginicial.png'
+         };
+         /*Temos que esperar todas as imagens serem carregadas.
+        Isso é feito através do evento 'onload'.
+        Definimos um contador para saber quantas já foram carregdas. 
+        Quando estiverem prontas, a aplicação pode iniciar de fato.*/
+
+         // Carregar todas
+         for (var i in imagens) {
+            var img = new Image();
+            img.src = 'img/' + imagens[i];
+            img.onload = carregando;
+            totalImagens++;
+            
+            // Substituir o nome pela imagem
+            imagens[i] = img;
+         }
+      }
+      
+      /*Função carregando vai monitorar o carregamento das imagens 
+      e iniciar a criação dos objetos quando todas estiverem prontas.*/
+      function carregando() {
+         context.save();
+         
+         // Fundo 
+         context.drawImage(imagens.bginicio, 0, 0, canvas.width,
+                           canvas.height);
+
+         // Barra de loading
+         carregadas++;
+         var tamanhoTotal = 300;
+         var tamanho = carregadas / totalImagens * tamanhoTotal;
+         //context.fillStyle = 'blue';
+         context.fillRect(0, 0, tamanho, 0);
+         
+         context.restore();         
+         
+         if (carregadas == totalImagens) {
+            iniciarObjetos();
+            mostrarLinkJogar();
+         }
+      }
+      
+      /*A função 'iniciarObjetos' iniciará os principais objetos do jogo.*/
+      function iniciarObjetos() {
+         // Passar o 'context' e a 'imagem' para os objetos
+         // Objetos principais
+         animacao = new Animacao(context);
+         teclado = new Teclado(document);
+         colisor = new Colisor();
+         bgfundo = new Fundo(context, imagens.bgfundo);
+         estrelas = new Fundo(context, imagens.estrelas);
+         plataforma = new Fundo(context, imagens.plataforma);
+         sonic = new Sonic(context, teclado, imagens.sonic, 
+                         imagens.explosao);
+         painel = new Painel(context, sonic);
+         
+         // Ligações entre objetos
+         animacao.novoSprite(bgfundo);
+         animacao.novoSprite(estrelas);
+         animacao.novoSprite(plataforma);
+         animacao.novoSprite(painel);
+         animacao.novoSprite(sonic);
+         
+         colisor.novoSprite(sonic);
+         animacao.novoProcessamento(colisor);
+
+         // Chamada da função configuracoesIniciais
+         configuracoesIniciais();
+      }
+      
+      /*Função configuracoesIniciais configura as velocidades dos fundos, 
+      posiciona a sonic, configura o disparo pela tecla Espaço e inicia a 
+      animação*/
+      function configuracoesIniciais() {
+
+         
+         // Fundos | Cada um, a uma velocidade diferente
+         bgfundo.velocidade = 285;
+         estrelas.velocidade = 375;
+         plataforma.velocidade = 400;
+         
+         // sONIC
+         sonic.posicionar();
+         sonic.velocidade = 275;
+         
+
+         
+         /*Vamos agora configurar a criação dos inimigos como um 
+         processamento da animação*/
+         // Inimigos
+         criacaoInimigos();
+
+         //Ring
+         criacaoRing();
+         
+         // Game Over
+         var semring = 0;
+         sonic.acabaramVidas = function() {
+            animacao.desligar();
+            gameOver();
+         }
+        var contador = 0;
+        var zerado = 0;
+         colisor.aoColidir = function(o1, o2) {
+   
+            if ( (o1 instanceof Sonic && o2 instanceof Ring) ||
+                 (o1 instanceof Ring && o2 instanceof Sonic) ){
+               contador += 1;
+               var arredondado = parseFloat(contador.toFixed(0));
+               painel.pontuacao = arredondado;
+            }
+            
+               if(painel.pontuacao >= 10){
+                  bgfundo.velocidade = 450;
+                  estrelas.velocidade = 495;
+                  plataforma.velocidade = 600;
+
+         
+                  // SONIC
+                  sonic.velocidade = 310;
+                  
+
+               }if(painel.pontuacao >= 15){
+                  bgfundo.velocidade = 600;
+                  estrelas.velocidade = 650;
+                  plataforma.velocidade = 675;
+                  
+                  // SONIC
+                  sonic.velocidade = 450;
+               
+               } if(painel.pontuacao < 20){
+                  bgfundo.velocidade = 285;
+                  estrelas.velocidade = 375;
+                  plataforma.velocidade = 400;
+                  
+                  // SONIC
+                  sonic.velocidade = 275;
+
+               
+               } if(painel.pontuacao >= 25){
+                  bgfundo.velocidade = 800;
+                  estrelas.velocidade = 850;
+                  plataforma.velocidade = 875;
+                  
+                  // SONIC
+                  sonic.velocidade = 530;
+
+               
+               }
+         }
+      
+      }
+      
+      /*Função que cria um objeto sem construtor, com o método 'processar', 
+      e insere como um processamento geral na animação.
+      
+      No método processar desse objeto, criamos um inimigo a cada 
+      segundo. Mas, para isso, necessitamos saber o instante em que o 
+      último inimigo foi gerado. Este instante é guardado no atributo 
+      'ultimoXXXXX' e atualizado quando o tempo decorrido ultrapassar 
+      1000 milissegundos.*/
+
+      function criacaoInimigos() {
+         criadorInimigos = {
+            ultimoEspinho: new Date().getTime(),
+            ultimoJoaninha: new Date().getTime(),
+            ultimoDr: new Date().getTime(),
+
+            processar: function() {
+               var agora = new Date().getTime();
+               var decorrido1 = agora - this.ultimoJoaninha;
+               var decorrido = agora - this.ultimoEspinho;
+               
+               if (decorrido > 1000) {
+                  novoEspinho();
+                  this.ultimoEspinho = agora;
+               }if (decorrido1 > 2300){
+                  novoJoaninha();
+                  this.ultimoJoaninha = agora;
+               }
+         
+            }
+         };
+
+         animacao.novoProcessamento(criadorInimigos);
+      }
+      
+
+      /*Se passar um segundo desde a geração do último inimigo, é 
+      chamada a função 'novoXXXX'. Ela gera inimigos em posições e 
+      com velocidades aleatórias.*/
+
+      function novoEspinho() {
+         var imgEspinho = imagens.espinho;
+         var espinho = new Espinho(context, imgEspinho, imagens.explosao);
+
+         // Mínimo: 500; máximo: 1000
+         if(painel.pontuacao < 10){
+         espinho.velocidade = 
+            Math.floor( 500 + Math.random() * (1000 - 1000 + 1) );
+         }else if(painel.pontuacao >= 10){
+         espinho.velocidade = 
+            Math.floor( 500 + Math.random() * (1000 - 500 + 1) );
+         }
+         
+         // Mínimo: 0; máximo: largura do canvas - largura do ovni   
+         espinho.x = 
+            Math.floor(Math.random() * 
+                       (canvas.width - imgEspinho.width + 1) );
+                  
+         // Descontar a altura
+         espinho.y = -imgEspinho.height;
+         
+         animacao.novoSprite(espinho);
+         colisor.novoSprite(espinho);
+      }
+      
+      function novoJoaninha() {
+         var imgJoaninha = imagens.joaninha;
+         var joaninha = new Espinho(context, imgJoaninha, imagens.explosao);
+
+         // Mínimo: 500; máximo: 1000
+         if(painel.pontuacao < 10){
+         joaninha.velocidade = 
+            Math.floor( 500 + Math.random() * (1000 - 1000 + 1) );
+         }else if(painel.pontuacao >= 10){
+         joaninha.velocidade = 
+            Math.floor( 500 + Math.random() * (1000 - 350 + 1) );
+         }
+         // Mínimo: 0; máximo: largura do canvas - largura do ovni   
+         joaninha.x = 
+            Math.floor(Math.random() * 
+                       (canvas.width - imgJoaninha.width + 1) );
+                  
+         // Descontar a altura
+         joaninha.y = -imgJoaninha.height;
+         
+         animacao.novoSprite(joaninha);
+         colisor.novoSprite(joaninha);
+      }
+
+
+      function criacaoRing() {
+         criadorRing = {
+            ultimoRing: new Date().getTime(),
+
+            processar: function() {
+               var agora = new Date().getTime();
+               var decorrido2 = agora - this.ultimoRing;
+               
+               if (decorrido2 > 900) {
+                  novoRing();
+                  this.ultimoRing = agora;
+               }
+            }
+         };
+
+         function novoRing() {
+         var imgRing = imagens.ring;
+         var ring = new Ring(context, imgRing);
+
+         // Mínimo: 500; máximo: 1000
+         if(painel.pontuacao < 35){
+         ring.velocidade = 
+            Math.floor( 500 + Math.random() * (1000 - 1000 + 1) );
+         }else if(painel.pontuacao >= 35){
+         ring.velocidade = 
+            Math.floor( 500 + Math.random() * (1000 - 650 + 1) );
+         }
+         // Mínimo: 0; máximo: largura do canvas - largura do ovni   
+         ring.x = 
+            Math.floor(Math.random() * 
+                       (canvas.width - imgRing.width + 1) );
+                  
+         // Descontar a altura
+         ring.y = -imgRing.height;
+         
+         animacao.novoSprite(ring);
+         colisor.novoSprite(ring);
+      }
+         
+         animacao.novoProcessamento(criadorRing);
+      }
+
+      
+      function carregarMusicas() {
+         musicaAcao = new Audio();
+         musicaAcao.src = 'snd/musica-acao.mp3';
+         musicaAcao.volume = 0.2;
+         musicaAcao.loop = true;
+         musicaAcao.load();
+         somring = new Audio();
+         somring.src = 'snd/pegou-ring.mp3';
+         somring.volume = 0.4;
+         somring.loop = false;
+         somring.load();
+      }
+
+      
+      
+      function mostrarLinkJogar() {
+         document.getElementById('link_jogar').style.display =
+            'block';
+            
+      }
+      
+      function iniciarJogo() {
+         criadorInimigos.ultimoEspinho = new Date().getTime();
+      
+         
+         document.getElementById('link_jogar').style.display =
+            'none';
+         musicaAcao.play();
+         animacao.ligar();
+         
+      }
+      
+      function gameOver() {
+         // Parar a música e rebobinar
+         musicaAcao.pause();
+         musicaAcao.currentTime = 0.0;
+         
+         // Fundo
+         context.drawImage(imagens.bgfundo, 0, 0, canvas.width,
+                           canvas.height);
+                        
+         
+         // Texto "Game Over"
+         context.save();
+         context.fillStyle = 'red';
+         context.strokeStyle = 'black';
+         context.font = '45px sans-serif';
+         context.fillText("NÃO FOI DESSA VEZ", 25, 400);
+         context.strokeText("NÃO FOI DESSA VEZ", 25, 400);
+         context.fillStyle = 'orange';
+         context.strokeStyle = 'black';
+         context.font = '32px sans-serif';
+         context.fillText("F5 PARA JOGAR NOVAMENTE", 25, 455);
+         context.strokeText("F5 PARA JOGAR NOVAMENTE", 25, 455);
+         context.fillStyle = 'green';
+         context.strokeStyle = 'black';
+         context.font = '25px sans-serif';
+         context.fillText("SUA PONTUAÇÃO: ", 25, 510);
+         context.fillText("SUA PONTUAÇÃO:", 25, 510);
+         context.save();
+         context.fillStyle = 'yellow';
+         context.font = '25px sans-serif';
+         context.fillText(painel.pontuacao, 265, 510);  
+
+         context.restore();
+         
+         // Restaurar as condições do sonic
+         sonic.vidasExtras = 3;
+         sonic.posicionar();
+         animacao.novoSprite(sonic);
+         colisor.novoSprite(sonic);
+         
+         // Tirar todos os inimigos da tela
+         removerInimigos();
+
+      }
+      
+      function removerInimigos() {
+         for (var i in animacao.sprites) {
+            if (animacao.sprites[i] instanceof Espinho){
+               animacao.excluirSprite(animacao.sprites[i])
+            }if (animacao.sprites[i] instanceof Joaninha){
+               animacao.excluirSprite(animacao.sprites[i])
+         }
+      }
+   }
+   </script>
+</body>
+
+</html>
